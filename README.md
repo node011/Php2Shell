@@ -131,6 +131,41 @@ Proof readback container must match the target container (`:8088` ↔ `php2shell
 
 ---
 
+## Three-phase operation against unknown (blind) targets
+
+Real staging targets don't ship our lab's hardcoded offsets — the build varies (distro package vs official image vs hand-compiled; two "8.4.26" builds measured ~0x5A00 apart). The tool therefore runs three phases:
+
+**Phase A — fingerprint** (plain GET, no exploitation traffic):
+
+```bash
+python3 php_exploit_general.py -u https://staging/index.php --fingerprint
+# {'php': '8.4', 'php_full': '8.4.26', 'apache': '2.4.69', 'distro': 'debian'}
+```
+
+Parses `Server` (Apache version, distro bucket) and `X-Powered-By` (PHP version). Headerless targets fall back to `unknown` buckets.
+
+**Phase B — build-keyed offsets files** (`out/offsets-*.env`, hardcoded per build):
+
+```
+# out/offsets-8.4.26-debian.env
+# status: VERIFIED - official php:8.4.26-apache (PHP 8.4.26 NTS, Apache 2.4.69)
+ZIF_OFFSET=0x465370
+DTOR_OFFSET=0x65eb60
+HTDATA_OFFSET=0x690D8
+STAGE1_N=841
+STAGE2_T=406
+STAGE2_V=16
+STAGE3_CARRIER=1
+```
+
+Search order: `offsets-<phpver>-<distro>.env` → `offsets-<phpver>-<apache>.env` → `offsets-<phpver>.env` → `offsets.env`; first existing wins. `STAGE1_N/STAGE2_T/STAGE2_V/STAGE3_CARRIER` override the leak-stage calibration for foreign builds. To extend coverage: fingerprint the target, obtain the identical libphp build (distro package download / same image), measure the offsets, and add `out/offsets-<ver>-<distro>.env`. Never trust a version string alone — two 8.4.26 builds differed by ~0x5A00 in `zif_system`; a wrong offset kills one worker per attempt.
+
+**Phase C — verify-first** (auto-on for blind targets):
+
+Before the real payload, the tool fires a **harmless probe**: the chain executes `system("sleep 4")` and the fire is proven purely by **response timing** (stage-3 response delayed ≈4 s over baseline; OOM-abort latency measured at ~0.05 s, so the oracle is clean). No files written, target state untouched; a miss kills at most one worker. Only a confirmed probe proceeds to the real payload run; otherwise `PROBE_FAILED` and exit 2. Skip with `--no-verify-first`; tune the probe sleep with `--probe-sleep N`.
+
+---
+
 ## Proof (authorized lab runs)
 
 Both screenshots are from the authorized lab on `redteam-srv01` (IBM Cloud VSI), targets built by `lab_setup.sh`.
