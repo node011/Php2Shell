@@ -168,7 +168,7 @@ Before the real payload, the tool fires a **harmless probe**: the chain executes
 
 ## Proof (authorized lab runs)
 
-Both screenshots are from the authorized lab on `redteam-srv01` (IBM Cloud VSI), targets built by `lab_setup.sh`.
+Both screenshots are from the authorized lab on `redteam-srv01` (Cloud VSI), targets built by `lab_setup.sh`.
 
 **WordPress target** — WP-less stub (`:8088/wp-content/index.php`), two consecutive runs, both fired on stage-3 attempt 1; in-band `PROOF:` via the `--proof-file` channel:
 
